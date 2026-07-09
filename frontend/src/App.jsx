@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
+// Defined clean root mapping variable for flexible deployment adjustments
+const API_BASE = "https://signsmart-api.onrender.com/api/v1";
+
 function App() {
   const [file, setFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState('');
@@ -22,7 +25,7 @@ function App() {
 
   const fetchHistory = async () => {
     try {
-      const response = await axios.get('https://signsmart-api.onrender.com/api/v1/contracts');
+      const response = await axios.get(`${API_BASE}/contracts`);
       setHistoryList(response.data);
     } catch (err) {
       console.error("Failed to sync database history:", err);
@@ -53,7 +56,7 @@ function App() {
       setStrategy(null);
       setActiveContractId(null);
 
-      const response = await axios.post('https://signsmart-api.onrender.com/api/v1/upload-contract', formData, {
+      const response = await axios.post(`${API_BASE}/upload-contract`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 30000 
       });
@@ -70,14 +73,14 @@ function App() {
       fetchHistory();
       setActiveTab('details'); 
     } catch (error) {
-      setUploadStatus(`Ingestion fault: ${error.message}`);
+      setUploadStatus(`Ingestion fault: ${error.response?.data?.detail || error.message}`);
     }
   };
 
   const loadHistoricalContract = async (id) => {
     setUploadStatus('Retrieving context records from PostgreSQL clusters...');
     try {
-      const response = await axios.get(`https://signsmart-api.onrender.com/api/v1/contracts/${id}`);
+      const response = await axios.get(`${API_BASE}/contracts/${id}`);
       
       setActiveContractId(response.data.id);
       setAnalysis(response.data.analysis);
@@ -104,7 +107,7 @@ function App() {
 
     try {
       // Fixed payload structure to send explicit mapping token to backend context manager
-      const response = await axios.post('https://signsmart-api.onrender.com/api/v1/chat', { 
+      const response = await axios.post(`${API_BASE}/chat`, { 
         contract_id: activeContractId, 
         question: query 
       });
@@ -122,8 +125,8 @@ function App() {
     setStrategyLoading(true);
     setStrategy(null);
     try {
-      // Re-mapped route to match specific resource entity paths
-      const response = await axios.post(`https://signsmart-api.onrender.com/api/v1/contracts/${activeContractId}/negotiation-strategy`);
+      // Re-mapped route to match specific resource entity paths cleanly
+      const response = await axios.post(`${API_BASE}/negotiation-strategy/${activeContractId}`);
       setStrategy(response.data.strategy);
     } catch (error) {
       alert("Failed to compile strategic audit report matrix.");
@@ -197,7 +200,7 @@ function App() {
       <div style={{ width: '260px', background: '#0b0f19', padding: '24px', display: 'flex', flexDirection: 'column', borderRight: '1px solid #1e293b', height: '100%', boxSizing: 'border-box', flexShrink: 0 }}>
         
         {/* Brand Header */}
-        <div style={{ display: 'flex', alignment: 'center', gap: '8px', marginBottom: '28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '28px' }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
           <span style={{ color: '#fff', fontSize: '0.95rem', fontWeight: '700', letterSpacing: '-0.02em' }}>SignSmart AI</span>
         </div>
@@ -251,7 +254,7 @@ function App() {
 
             <div className="upload-card" onClick={() => document.getElementById('fileInRef').click()}>
               <input type="file" id="fileInRef" accept=".pdf" onChange={handleFileChange} style={{ display: 'none' }} />
-              <div style={{ display: 'flex', flexDirection: 'column', alignTemplate: 'center', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                 <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                 </div>
@@ -307,28 +310,28 @@ function App() {
                     <div className="dashboard-metric-box" style={{ borderColor: '#86efac', background: '#fcfdfd' }}>
                       <h3 style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: '#166534', fontWeight: '700', borderBottom: '1px solid #dcfce7', paddingBottom: '6px' }}>🟢 Favorable Conditions (Pros)</h3>
                       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.825rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {strategy.pros.map((item, i) => <li key={i}>{item}</li>)}
+                        {strategy.pros?.map((item, i) => <li key={i}>{item}</li>)}
                       </ul>
                     </div>
 
                     <div className="dashboard-metric-box" style={{ borderColor: '#fde047' }}>
                       <h3 style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: '#854d0e', fontWeight: '700', borderBottom: '1px solid #fef9c3', paddingBottom: '6px' }}>🟡 Disadvantageous Flags (Cons)</h3>
                       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.825rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {strategy.cons.map((item, i) => <li key={i}>{item}</li>)}
+                        {strategy.cons?.map((item, i) => <li key={i}>{item}</li>)}
                       </ul>
                     </div>
 
                     <div className="dashboard-metric-box" style={{ borderColor: '#fca5a5', gridColumn: 'span 2' }}>
                       <h3 style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: '#991b1b', fontWeight: '700', borderBottom: '1px solid #fee2e2', paddingBottom: '6px' }}>🔴 Critical Hazard Vulnerabilities & Risks</h3>
                       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.825rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {strategy.critical_risks.map((item, i) => <li key={i}><strong style={{color: '#b91c1c'}}>Risk factor:</strong> {item}</li>)}
+                        {strategy.critical_risks?.map((item, i) => <li key={i}><strong style={{color: '#b91c1c'}}>Risk factor:</strong> {item}</li>)}
                       </ul>
                     </div>
 
                     <div className="dashboard-metric-box" style={{ borderColor: '#bfdbfe', gridColumn: 'span 2', background: '#f8fafc' }}>
                       <h3 style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: '#1e40af', fontWeight: '700', borderBottom: '1px solid #dbeafe', paddingBottom: '6px' }}>🔵 Target Negotiable Items</h3>
                       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.825rem', color: '#1e293b', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {strategy.negotiable_points.map((item, i) => <li key={i} style={{fontWeight: '500'}}>{item}</li>)}
+                        {strategy.negotiable_points?.map((item, i) => <li key={i} style={{fontWeight: '500'}}>{item}</li>)}
                       </ul>
                     </div>
                   </div>

@@ -18,7 +18,7 @@ app = FastAPI(title="Car Lease & Loan Audit Suite API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173","https://signsmart-4zl7.onrender.com"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://signsmart-4zl7.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,8 +31,8 @@ def get_db_connection():
             port=os.getenv("DB_PORT", "5432"),
             database=os.getenv("DB_NAME", "car_lease_db"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "")
-            sslmode="require" if os.getenv("DB_HOST") else "prefer"
+            password=os.getenv("DB_PASSWORD", ""),
+            sslmode="require"
         )
     except Exception as e:
         print(f"❌ Database connection failed: {str(e)}")
@@ -43,7 +43,7 @@ def init_db():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Drops the out-of-sync table from the previous step so PostgreSQL can rebuild the new layout fresh
+        # Drops the out-of-sync table if resetting schema
         cursor.execute("DROP TABLE IF EXISTS contracts CASCADE;")
         
         cursor.execute("""
@@ -60,12 +60,11 @@ def init_db():
         conn.close()
         print("✅ PostgreSQL tables initialized successfully with fresh schema definitions.")
     except Exception as e:
-        print(f"⚠️ Table initialization bypass: {str(e)}")
+        print(f"❌ Critical: Table initialization failed: {str(e)}")
+        raise e  # Stop the application from initializing if DB is down
 
 # Force clean database verification layout on launch
 init_db()
-
-GLOBAL_ACTIVE_CONTRACT = {"id": None, "text": "", "filename": ""}
 
 # --- STRUCTURED DATA SCHEMAS FOR FINANCING / LOANS ---
 class LoanCostPillars(BaseModel):
@@ -132,6 +131,7 @@ class AssessmentPlaybook(BaseModel):
     negotiable_points: List[str] = Field(..., description="Specific target terms or limits that the user can demand changes for")
 
 class ChatInput(BaseModel):
+    contract_id: int = Field(..., description="The ID of the contract context to check against")
     question: str
 
 @app.get("/")
@@ -163,10 +163,6 @@ def get_contract_by_id(contract_id: int):
         
         if not row:
             raise HTTPException(status_code=404, detail="Requested record not found in system databases.")
-        
-        GLOBAL_ACTIVE_CONTRACT["id"] = contract_id
-        GLOBAL_ACTIVE_CONTRACT["filename"] = row[0]
-        GLOBAL_ACTIVE_CONTRACT["text"] = row[1]
         
         return {
             "id": contract_id,
@@ -212,57 +208,62 @@ async def upload_contract(file: UploadFile = File(...)):
             ),
         )
         
+        # Converts parsed schema directly into an safe serializable primitive dict structure
+        analysis_data = response.parsed.model_dump()
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         insert_query = "INSERT INTO contracts (filename, extracted_text, analysis_json, strategy_json) VALUES (%s, %s, %s, %s) RETURNING id"
-        cursor.execute(insert_query, (file.filename, extracted_text, json.dumps(response.parsed.model_dump()), None))
+        cursor.execute(insert_query, (file.filename, extracted_text, json.dumps(analysis_data), None))
         new_id = cursor.fetchone()[0]
         conn.commit()
         cursor.close()
         conn.close()
         
-        GLOBAL_ACTIVE_CONTRACT["id"] = new_id
-        GLOBAL_ACTIVE_CONTRACT["filename"] = file.filename
-        GLOBAL_ACTIVE_CONTRACT["text"] = extracted_text
-        
-        return {"id": new_id, "filename": file.filename, "status": "Success", "analysis": response.parsed}
+        return {"id": new_id, "filename": file.filename, "status": "Success", "analysis": analysis_data}
     except HTTPException as he:
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/v1/negotiation-strategy")
-async def generate_negotiation_strategy():
-    if not GLOBAL_ACTIVE_CONTRACT["text"] or not GLOBAL_ACTIVE_CONTRACT["id"]:
-        raise HTTPException(status_code=400, detail="Active tracking index missing.")
-    
+@app.post("/api/v1/negotiation-strategy/{contract_id}")
+async def generate_negotiation_strategy(contract_id: int):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT strategy_json FROM contracts WHERE id = %s", (GLOBAL_ACTIVE_CONTRACT["id"],))
+        cursor.execute("SELECT extracted_text, strategy_json FROM contracts WHERE id = %s", (contract_id,))
         row = cursor.fetchone()
         
-        if row and row[0]:
+        if not row:
             cursor.close()
             conn.close()
-            return {"strategy": json.loads(row[0])}
+            raise HTTPException(status_code=404, detail="Contract instance not found.")
+            
+        extracted_text, strategy_json = row[0], row[1]
+        
+        if strategy_json:
+            cursor.close()
+            conn.close()
+            return {"strategy": json.loads(strategy_json)}
             
         prompt = f"Analyze this automotive agreement. Extract the Pros, Cons, Critical Risks, and specific Negotiable Points into a clean structured JSON schema."
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=[GLOBAL_ACTIVE_CONTRACT["text"], prompt],
+            contents=[extracted_text, prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=AssessmentPlaybook
             )
         )
         
-        cursor.execute("UPDATE contracts SET strategy_json = %s WHERE id = %s", (json.dumps(response.parsed.model_dump()), GLOBAL_ACTIVE_CONTRACT["id"]))
+        strategy_data = response.parsed.model_dump()
+        
+        cursor.execute("UPDATE contracts SET strategy_json = %s WHERE id = %s", (json.dumps(strategy_data), contract_id))
         conn.commit()
         cursor.close()
         conn.close()
         
-        return {"strategy": response.parsed}
+        return {"strategy": strategy_data}
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -270,10 +271,20 @@ async def generate_negotiation_strategy():
 
 @app.post("/api/v1/chat")
 async def chat_with_contract(payload: ChatInput):
-    if not GLOBAL_ACTIVE_CONTRACT["text"]:
-        raise HTTPException(status_code=400, detail="No active document instance cached.")
     try:
-        prompt = f"Answer the user query based strictly on the text context below.\n\nCONTEXT:\n{GLOBAL_ACTIVE_CONTRACT['text']}\n\nUSER QUESTION:\n{payload.question}"
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT extracted_text FROM contracts WHERE id = %s", (payload.contract_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Document instance context not found.")
+            
+        extracted_text = row[0]
+        
+        prompt = f"Answer the user query based strictly on the text context below.\n\nCONTEXT:\n{extracted_text}\n\nUSER QUESTION:\n{payload.question}"
         response = ai_client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         return {"answer": response.text}
     except HTTPException as he:
