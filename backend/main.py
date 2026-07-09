@@ -254,9 +254,11 @@ async def chat_with_contract(payload: ChatInput):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
 # --- THE FRONTEND COUPLING LAYER ---
-# Grabs the compiled React webpage code from the frontend directory next door
-frontend_dist_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+# Grabs the compiled React webpage code from inside the local backend directory
+frontend_dist_path = os.path.join(os.path.dirname(__file__), "dist")
 
 if os.path.exists(frontend_dist_path):
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist_path, "assets")), name="assets")
@@ -266,7 +268,7 @@ def serve_react_app(catchall: str):
     index_file = os.path.join(frontend_dist_path, "index.html")
     if os.path.exists(index_file):
         return FileResponse(index_file)
-    return {"message": "SignSmart API is running, but the frontend folder couldn't be located."}
+    return {"message": "SignSmart API is running, but the frontend folder couldn't be located locally."}
 
 if __name__ == "__main__":
     import uvicorn
