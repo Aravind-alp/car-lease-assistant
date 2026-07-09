@@ -19,7 +19,7 @@ function App() {
 
   const fetchHistory = async () => {
     try {
-      const response = await axios.get('http://127.0.0.1:8000/api/v1/contracts');
+      const response = await axios.get('https://signsmart-api.onrender.com/api/v1/contracts');
       setHistoryList(response.data);
     } catch (err) {
       console.error("Failed to sync database history:", err);
@@ -49,7 +49,7 @@ function App() {
       setAnalysis(null);
       setStrategy(null);
 
-      const response = await axios.post('http://127.0.0.1:8000/api/v1/upload-contract', formData, {
+      const response = await axios.post('https://signsmart-api.onrender.com/api/v1/upload-contract', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 30000 
       });
@@ -69,7 +69,7 @@ function App() {
   const loadHistoricalContract = async (id) => {
     setUploadStatus('Retrieving context records from PostgreSQL clusters...');
     try {
-      const response = await axios.get(`http://127.0.0.1:8000/api/v1/contracts/${id}`);
+      const response = await axios.get(`https://signsmart-api.onrender.com/api/v1/contracts/${id}`);
       setAnalysis(response.data.analysis);
       setStrategy(response.data.strategy || null);
       setMessages([
@@ -92,7 +92,7 @@ function App() {
     setChatLoading(true);
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/v1/chat', { question: query });
+      const response = await axios.post('https://signsmart-api.onrender.com/api/v1/chat', { question: query });
       setMessages(prev => [...prev, { sender: 'ai', text: response.data.answer }]);
     } catch (error) {
       setMessages(prev => [...prev, { sender: 'ai', text: "Error running streaming framework components." }]);
@@ -105,7 +105,7 @@ function App() {
     setStrategyLoading(true);
     setStrategy(null);
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/v1/negotiation-strategy');
+      const response = await axios.post('https://signsmart-api.onrender.com/api/v1/negotiation-strategy');
       setStrategy(response.data.strategy);
     } catch (error) {
       alert("Failed to compile strategic audit report matrix.");
@@ -182,7 +182,7 @@ function App() {
         {/* Brand Header */}
         <div style={{ display: 'flex', alignment: 'center', gap: '8px', marginBottom: '28px' }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-          <span style={{ color: '#fff', fontSize: '0.95rem', fontWeight: '700', letterSpacing: '-0.02em' }}>SignSmart</span>
+          <span style={{ color: '#fff', fontSize: '0.95rem', fontWeight: '700', letterSpacing: '-0.02em' }}>SignSmart AI</span>
         </div>
         
         {/* UPPER HALF: WORKSPACE MENU OPTIONS */}
