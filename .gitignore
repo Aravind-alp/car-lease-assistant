@@ -1,0 +1,15 @@
+# Python environment and cache
+backend/venv/
+backend/.env
+backend/__pycache__/
+backend/*.pyc
+backend/contracts.db
+
+# Node dependencies and build files
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# System files
+.DS_Store
+Thumbs.db
