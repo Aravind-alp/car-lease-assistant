@@ -18,7 +18,7 @@ app = FastAPI(title="Car Lease & Loan Audit Suite API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173","https://signsmart.onrender.com"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173","https://signsmart-4zl7.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,6 +32,7 @@ def get_db_connection():
             database=os.getenv("DB_NAME", "car_lease_db"),
             user=os.getenv("DB_USER", "postgres"),
             password=os.getenv("DB_PASSWORD", "")
+            sslmode="require" if os.getenv("DB_HOST") else "prefer"
         )
     except Exception as e:
         print(f"❌ Database connection failed: {str(e)}")
