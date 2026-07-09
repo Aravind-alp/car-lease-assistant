@@ -5,6 +5,7 @@ import axios from 'axios';
 const API_BASE = "/api/v1";
 
 function App() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [file, setFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState('');
   const [analysis, setAnalysis] = useState(null);
@@ -91,6 +92,7 @@ function App() {
       ]);
       setUploadStatus(`Workspace context: ${response.data.filename}`);
       setActiveTab('details'); 
+      setIsSidebarOpen(false); // Close sidebar overlay on mobile after picking a file
     } catch (error) {
       setUploadStatus('Failed to retrieve historical record.');
     }
@@ -106,7 +108,6 @@ function App() {
     setChatLoading(true);
 
     try {
-      // Fixed payload structure to send explicit mapping token to backend context manager
       const response = await axios.post(`${API_BASE}/chat`, { 
         contract_id: activeContractId, 
         question: query 
@@ -125,7 +126,6 @@ function App() {
     setStrategyLoading(true);
     setStrategy(null);
     try {
-      // Re-mapped route to match specific resource entity paths cleanly
       const response = await axios.post(`${API_BASE}/negotiation-strategy/${activeContractId}`);
       setStrategy(response.data.strategy);
     } catch (error) {
@@ -136,7 +136,7 @@ function App() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", sans-serif', color: '#0f172a', background: '#fafafa', overflow: 'hidden' }}>
+    <div className="app-container" style={{ display: 'flex', height: '100vh', width: '100vw', fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", sans-serif', color: '#0f172a', background: '#fafafa', overflow: 'hidden', position: 'relative' }}>
       
       <style>{`
         ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -194,27 +194,79 @@ function App() {
         
         @keyframes viewSlide { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .tab-view-animation { animation: viewSlide 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; height: 100%; display: flex; flex-direction: column; width: 100%; box-sizing: border-box; }
+
+        /* 📱 MOBILE RESPONSIVE CSS INJECTOR ENGINE */
+        .mobile-hamburger-bar {
+          display: none;
+        }
+
+        @media (max-width: 768px) {
+          .mobile-hamburger-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: fixed;
+            top: 0; left: 0; right: 0; height: 60px;
+            background: #0b0f19; padding: 0 20px;
+            z-index: 80; border-bottom: 1px solid #1e293b;
+          }
+          .hamburger-toggle-btn {
+            background: transparent; border: none; color: #fff;
+            font-size: 1.5rem; cursor: pointer; padding: 4px 8px;
+          }
+          .sidebar-panel-container {
+            position: fixed !important;
+            top: 0; bottom: 0; left: 0;
+            z-index: 100;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            transform: translateX(-100%);
+          }
+          .sidebar-panel-container.open {
+            transform: translateX(0) !important;
+          }
+          .main-content-view-viewport {
+            padding-top: 80px !important;
+            padding-left: 20px !important;
+            padding-right: 20px !important;
+          }
+          .grid-half {
+            grid-template-columns: 1fr !important;
+          }
+          .dashboard-metric-box {
+            grid-column: span 1 !important;
+          }
+        }
       `}</style>
 
-      {/* --- SIDEBAR WORKSPACE WITH HALF-AND-HALF SPLIT LAYOUT --- */}
-      <div style={{ width: '260px', background: '#0b0f19', padding: '24px', display: 'flex', flexDirection: 'column', borderRight: '1px solid #1e293b', height: '100%', boxSizing: 'border-box', flexShrink: 0 }}>
+      {/* 📱 Mobile Floating Top Header Bar */}
+      <div className="mobile-hamburger-bar">
+        <span style={{ color: '#fff', fontSize: '1rem', fontWeight: '700' }}>SignSmart AI</span>
+        <button className="hamburger-toggle-btn" onClick={() => setIsSidebarOpen(true)}>☰</button>
+      </div>
+
+      {/* --- SIDEBAR WORKSPACE WITH MOBILE RESPONSIBILITY STATE COUPLING --- */}
+      <div className={`sidebar-panel-container ${isSidebarOpen ? 'open' : ''}`} style={{ width: '260px', background: '#0b0f19', padding: '24px', display: 'flex', flexDirection: 'column', borderRight: '1px solid #1e293b', height: '100%', boxSizing: 'border-box', flexShrink: 0 }}>
         
-        {/* Brand Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '28px' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-          <span style={{ color: '#fff', fontSize: '0.95rem', fontWeight: '700', letterSpacing: '-0.02em' }}>SignSmart AI</span>
+        {/* Brand Header & Mobile Close Indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            <span style={{ color: '#fff', fontSize: '0.95rem', fontWeight: '700', letterSpacing: '-0.02em' }}>SignSmart AI</span>
+          </div>
+          {/* Mobile visible execution button to pull layout backwards */}
+          <button style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: '1.2rem', cursor: 'pointer', display: window.innerWidth <= 768 ? 'block' : 'none' }} onClick={() => setIsSidebarOpen(false)}>✕</button>
         </div>
         
         {/* UPPER HALF: WORKSPACE MENU OPTIONS */}
         <div style={{ textTransform: 'uppercase', fontSize: '0.65rem', fontWeight: '700', letterSpacing: '0.075em', color: '#475569', marginBottom: '10px' }}>Workspace Option</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '32px' }}>
-          <button onClick={() => setActiveTab('details')} className={`nav-tab-btn ${activeTab === 'details' ? 'active' : ''}`}>
+          <button onClick={() => { setActiveTab('details'); setIsSidebarOpen(false); }} className={`nav-tab-btn ${activeTab === 'details' ? 'active' : ''}`}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
             Document Details
           </button>
           
           <button 
-            onClick={() => setActiveTab('chat')} 
+            onClick={() => { setActiveTab('chat'); setIsSidebarOpen(false); }} 
             className={`nav-tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
             disabled={!analysis}
             style={{ opacity: !analysis ? 0.4 : 1, cursor: !analysis ? 'not-allowed' : 'pointer' }}
@@ -241,7 +293,7 @@ function App() {
       </div>
 
       {/* --- MASTER RUNTIME VIEWSPACE --- */}
-      <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="main-content-view-viewport" style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         
         {/* VIEW ARCHETYPE A: COMPLIANCE EXTRACTION MATRIX PANEL */}
         {activeTab === 'details' && (
@@ -284,7 +336,7 @@ function App() {
                 {/* Header Banner */}
                 <div className="grid-half">
                   <div className="dashboard-metric-box" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ width: '52px', height: '52px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: '800', color: '#166534', border: '1px solid #bbf7d0' }}>
+                    <div style={{ width: '52px', height: '52px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: '800', color: '#166534', border: '1px solid #bbf7d0', flexShrink: 0 }}>
                       {analysis.contract_fairness_score}
                     </div>
                     <div>
@@ -495,14 +547,14 @@ function App() {
               <form onSubmit={handleSendMessage} style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
                 <input 
                   type="text" 
-                  placeholder="Inquire regarding specific checklist items, penalty structures, or protection parameters..." 
+                  placeholder="Inquire regarding specific checklist items..." 
                   value={userQuestion}
                   onChange={(e) => setUserQuestion(e.target.value)}
                   disabled={chatLoading}
                   style={{ flex: 1, padding: '16px 20px', border: 'none', outline: 'none', fontSize: '0.875rem', color: '#0f172a' }}
                 />
                 <button type="submit" disabled={chatLoading} style={{ padding: '0 24px', background: '#0b0f19', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>
-                  Execute Request
+                  Execute
                 </button>
               </form>
             </div>
@@ -511,6 +563,12 @@ function App() {
         )}
 
       </div>
+
+      {/* 🌫️ Shaded Mobile Backdrop Screen Overlay */}
+      {isSidebarOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', zIndex: 90 }} onClick={() => setIsSidebarOpen(false)}></div>
+      )}
+
     </div>
   );
 }
