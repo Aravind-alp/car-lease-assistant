@@ -7,6 +7,9 @@ function App() {
   const [analysis, setAnalysis] = useState(null);
   const [historyList, setHistoryList] = useState([]);
   const [activeTab, setActiveTab] = useState('details');
+  
+  // TRACKING THE REFACTORED STATELESS IDENTIFIER
+  const [activeContractId, setActiveContractId] = useState(null);
 
   // Chat memory streams
   const [messages, setMessages] = useState([]);
@@ -48,6 +51,7 @@ function App() {
       setUploadStatus('Running automated contract intelligence extraction...');
       setAnalysis(null);
       setStrategy(null);
+      setActiveContractId(null);
 
       const response = await axios.post('https://signsmart-api.onrender.com/api/v1/upload-contract', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -56,6 +60,10 @@ function App() {
       
       setUploadStatus('Analysis calculated successfully.');
       setAnalysis(response.data.analysis);
+      
+      // Save the returned session identifier directly to our isolated React view state
+      setActiveContractId(response.data.id);
+      
       setMessages([
         { sender: 'ai', text: `Document processed. Classified as an automotive ${response.data.analysis.contract_type} agreement. All custom cost vectors are ready for auditing below.` }
       ]);
@@ -70,8 +78,11 @@ function App() {
     setUploadStatus('Retrieving context records from PostgreSQL clusters...');
     try {
       const response = await axios.get(`https://signsmart-api.onrender.com/api/v1/contracts/${id}`);
+      
+      setActiveContractId(response.data.id);
       setAnalysis(response.data.analysis);
       setStrategy(response.data.strategy || null);
+      
       setMessages([
         { sender: 'ai', text: `Restored workspace session from archive database for: "${response.data.filename}".` }
       ]);
@@ -84,7 +95,7 @@ function App() {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!userQuestion.trim()) return;
+    if (!userQuestion.trim() || !activeContractId) return;
 
     const query = userQuestion;
     setUserQuestion('');
@@ -92,7 +103,11 @@ function App() {
     setChatLoading(true);
 
     try {
-      const response = await axios.post('https://signsmart-api.onrender.com/api/v1/chat', { question: query });
+      // Fixed payload structure to send explicit mapping token to backend context manager
+      const response = await axios.post('https://signsmart-api.onrender.com/api/v1/chat', { 
+        contract_id: activeContractId, 
+        question: query 
+      });
       setMessages(prev => [...prev, { sender: 'ai', text: response.data.answer }]);
     } catch (error) {
       setMessages(prev => [...prev, { sender: 'ai', text: "Error running streaming framework components." }]);
@@ -102,10 +117,13 @@ function App() {
   };
 
   const generateStrategy = async () => {
+    if (!activeContractId) return alert("No active contract reference loaded!");
+    
     setStrategyLoading(true);
     setStrategy(null);
     try {
-      const response = await axios.post('https://signsmart-api.onrender.com/api/v1/negotiation-strategy');
+      // Re-mapped route to match specific resource entity paths
+      const response = await axios.post(`https://signsmart-api.onrender.com/api/v1/contracts/${activeContractId}/negotiation-strategy`);
       setStrategy(response.data.strategy);
     } catch (error) {
       alert("Failed to compile strategic audit report matrix.");
@@ -117,7 +135,6 @@ function App() {
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw', fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", sans-serif', color: '#0f172a', background: '#fafafa', overflow: 'hidden' }}>
       
-      {/* --- STANDARD VALID CSS INJECTION LAYER --- */}
       <style>{`
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -287,7 +304,6 @@ function App() {
                 {/* SAAS PROS / CONS RISK DECK COMPONENT */}
                 {strategy && (
                   <div className="grid-half tab-view-animation">
-                    {/* Favorable items card */}
                     <div className="dashboard-metric-box" style={{ borderColor: '#86efac', background: '#fcfdfd' }}>
                       <h3 style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: '#166534', fontWeight: '700', borderBottom: '1px solid #dcfce7', paddingBottom: '6px' }}>🟢 Favorable Conditions (Pros)</h3>
                       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.825rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -295,7 +311,6 @@ function App() {
                       </ul>
                     </div>
 
-                    {/* Unfavorable items card */}
                     <div className="dashboard-metric-box" style={{ borderColor: '#fde047' }}>
                       <h3 style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: '#854d0e', fontWeight: '700', borderBottom: '1px solid #fef9c3', paddingBottom: '6px' }}>🟡 Disadvantageous Flags (Cons)</h3>
                       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.825rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -303,7 +318,6 @@ function App() {
                       </ul>
                     </div>
 
-                    {/* Critical Risks card */}
                     <div className="dashboard-metric-box" style={{ borderColor: '#fca5a5', gridColumn: 'span 2' }}>
                       <h3 style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: '#991b1b', fontWeight: '700', borderBottom: '1px solid #fee2e2', paddingBottom: '6px' }}>🔴 Critical Hazard Vulnerabilities & Risks</h3>
                       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.825rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -311,7 +325,6 @@ function App() {
                       </ul>
                     </div>
 
-                    {/* Points of Negotiation Card */}
                     <div className="dashboard-metric-box" style={{ borderColor: '#bfdbfe', gridColumn: 'span 2', background: '#f8fafc' }}>
                       <h3 style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: '#1e40af', fontWeight: '700', borderBottom: '1px solid #dbeafe', paddingBottom: '6px' }}>🔵 Target Negotiable Items</h3>
                       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.825rem', color: '#1e293b', display: 'flex', flexDirection: 'column', gap: '8px' }}>
