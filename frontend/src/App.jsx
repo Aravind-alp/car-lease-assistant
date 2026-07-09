@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 // Defined clean root mapping variable for flexible deployment adjustments
-const API_BASE = "https://signsmart-api.onrender.com/api/v1";
+const API_BASE = "/api/v1";
 
 function App() {
   const [file, setFile] = useState(null);

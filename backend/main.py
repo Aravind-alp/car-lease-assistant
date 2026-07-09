@@ -4,6 +4,8 @@ import json
 import psycopg2
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from pypdf import PdfReader
 from pydantic import BaseModel, Field
@@ -18,7 +20,7 @@ app = FastAPI(title="Car Lease & Loan Audit Suite API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://signsmart-4zl7.onrender.com"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,10 +44,7 @@ def init_db():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Drops the out-of-sync table if resetting schema
         cursor.execute("DROP TABLE IF EXISTS contracts CASCADE;")
-        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS contracts (
                 id SERIAL PRIMARY KEY,
@@ -58,15 +57,14 @@ def init_db():
         conn.commit()
         cursor.close()
         conn.close()
-        print("✅ PostgreSQL tables initialized successfully with fresh schema definitions.")
+        print("✅ PostgreSQL tables initialized successfully.")
     except Exception as e:
         print(f"❌ Critical: Table initialization failed: {str(e)}")
-        raise e  # Stop the application from initializing if DB is down
+        raise e
 
-# Force clean database verification layout on launch
 init_db()
 
-# --- STRUCTURED DATA SCHEMAS FOR FINANCING / LOANS ---
+# --- PYDANTIC STRUCTURAL CODE SCHEMAS ---
 class LoanCostPillars(BaseModel):
     financed_amount: Optional[float] = Field(None, description="Base vehicle price minus down payment")
     apr: Optional[float] = Field(None, description="Annual Percentage Rate")
@@ -86,7 +84,6 @@ class LoanTriggerEvents(BaseModel):
     repossession_rights: Optional[str] = Field(None, description="Right to seize vehicle without court orders")
     right_to_cure: Optional[str] = Field(None, description="Grace period allowed to fix a default")
 
-# --- STRUCTURED DATA SCHEMAS FOR LEASING ---
 class LeaseCostPillars(BaseModel):
     gross_capitalized_cost: Optional[float] = Field(None, description="Agreed-upon initial value of the vehicle")
     capitalized_cost_reduction: Optional[float] = Field(None, description="Total down payment, trade-in, and rebates applied")
@@ -134,10 +131,7 @@ class ChatInput(BaseModel):
     contract_id: int = Field(..., description="The ID of the contract context to check against")
     question: str
 
-@app.get("/")
-def read_root():
-    return {"message": "Audit Suite API Running"}
-
+# --- ENGINE LOGIC ENDPOINTS ---
 @app.get("/api/v1/contracts")
 def get_all_contracts():
     try:
@@ -160,31 +154,25 @@ def get_contract_by_id(contract_id: int):
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        
         if not row:
-            raise HTTPException(status_code=404, detail="Requested record not found in system databases.")
-        
+            raise HTTPException(status_code=404, detail="Requested record not found.")
         return {
             "id": contract_id,
             "filename": row[0],
             "analysis": json.loads(row[2]),
             "strategy": json.loads(row[3]) if row[3] else None
         }
-    except HTTPException as he:
-        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database execution crash: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/upload-contract")
 async def upload_contract(file: UploadFile = File(...)):
     if not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-    
     try:
         contents = await file.read()
         pdf_stream = io.BytesIO(contents)
         reader = PdfReader(pdf_stream)
-        
         extracted_text = ""
         for page_num, page in enumerate(reader.pages):
             text = page.extract_text()
@@ -198,17 +186,11 @@ async def upload_contract(file: UploadFile = File(...)):
             model='gemini-2.5-flash',
             contents=extracted_text,
             config=types.GenerateContentConfig(
-                system_instruction=(
-                    "You are a legal and financial validation model specializing in automotive contracts. "
-                    "Determine if the file is a 'LOAN' or a 'LEASE'. Extract all matching key elements accurately. "
-                    "Leave non-applicable track properties as null."
-                ),
+                system_instruction="Determine if the file is a 'LOAN' or a 'LEASE'. Extract matching elements.",
                 response_mime_type="application/json",
                 response_schema=AutomotiveContractAudit,
             ),
         )
-        
-        # Converts parsed schema directly into an safe serializable primitive dict structure
         analysis_data = response.parsed.model_dump()
         
         conn = get_db_connection()
@@ -219,10 +201,7 @@ async def upload_contract(file: UploadFile = File(...)):
         conn.commit()
         cursor.close()
         conn.close()
-        
         return {"id": new_id, "filename": file.filename, "status": "Success", "analysis": analysis_data}
-    except HTTPException as he:
-        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -233,39 +212,28 @@ async def generate_negotiation_strategy(contract_id: int):
         cursor = conn.cursor()
         cursor.execute("SELECT extracted_text, strategy_json FROM contracts WHERE id = %s", (contract_id,))
         row = cursor.fetchone()
-        
         if not row:
             cursor.close()
             conn.close()
-            raise HTTPException(status_code=404, detail="Contract instance not found.")
-            
+            raise HTTPException(status_code=404, detail="Contract not found.")
         extracted_text, strategy_json = row[0], row[1]
-        
         if strategy_json:
             cursor.close()
             conn.close()
             return {"strategy": json.loads(strategy_json)}
             
-        prompt = f"Analyze this automotive agreement. Extract the Pros, Cons, Critical Risks, and specific Negotiable Points into a clean structured JSON schema."
+        prompt = "Analyze this automotive agreement. Extract Pros, Cons, Risks, and Negotiable Points."
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[extracted_text, prompt],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=AssessmentPlaybook
-            )
+            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=AssessmentPlaybook)
         )
-        
         strategy_data = response.parsed.model_dump()
-        
         cursor.execute("UPDATE contracts SET strategy_json = %s WHERE id = %s", (json.dumps(strategy_data), contract_id))
         conn.commit()
         cursor.close()
         conn.close()
-        
         return {"strategy": strategy_data}
-    except HTTPException as he:
-        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -278,19 +246,27 @@ async def chat_with_contract(payload: ChatInput):
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        
         if not row:
-            raise HTTPException(status_code=404, detail="Document instance context not found.")
-            
-        extracted_text = row[0]
-        
-        prompt = f"Answer the user query based strictly on the text context below.\n\nCONTEXT:\n{extracted_text}\n\nUSER QUESTION:\n{payload.question}"
+            raise HTTPException(status_code=404, detail="Context not found.")
+        prompt = f"Answer strictly based on context.\n\nCONTEXT:\n{row[0]}\n\nUSER QUESTION:\n{payload.question}"
         response = ai_client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         return {"answer": response.text}
-    except HTTPException as he:
-        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- THE FRONTEND COUPLING LAYER ---
+# Grabs the compiled React webpage code from the frontend directory next door
+frontend_dist_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+
+if os.path.exists(frontend_dist_path):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist_path, "assets")), name="assets")
+
+@app.get("/{catchall:path}")
+def serve_react_app(catchall: str):
+    index_file = os.path.join(frontend_dist_path, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return {"message": "SignSmart API is running, but the frontend folder couldn't be located."}
 
 if __name__ == "__main__":
     import uvicorn
