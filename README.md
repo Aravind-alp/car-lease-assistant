@@ -32,13 +32,4 @@ Features a ChatGPT-style deep-dive chat prompt strictly locked to the viewport b
 ### 4. Relational Persistence Sidebar
 A reactive, half-and-half sidebar cockpit that tracks document ingestion history directly out of the PostgreSQL cluster, allowing instant workspace context-switches without wasting extra AI tokens or re-uploading duplicate files.
 
----
 
-## 💻 Local Workspace Initialization
-
-### Backend Setup
-1. Create a Python virtual environment and activate it:
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: .\venv\Scripts\activate
