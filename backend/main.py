@@ -183,7 +183,7 @@ async def upload_contract(file: UploadFile = File(...)):
             raise HTTPException(status_code=422, detail="Text extraction missing.")
         
         response = ai_client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.1-flash-lite',
             contents=extracted_text,
             config=types.GenerateContentConfig(
                 system_instruction="Determine if the file is a 'LOAN' or a 'LEASE'. Extract matching elements.",
@@ -224,7 +224,7 @@ async def generate_negotiation_strategy(contract_id: int):
             
         prompt = "Analyze this automotive agreement. Extract Pros, Cons, Risks, and Negotiable Points."
         response = ai_client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.1-flash-lite',
             contents=[extracted_text, prompt],
             config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=AssessmentPlaybook)
         )
@@ -249,7 +249,7 @@ async def chat_with_contract(payload: ChatInput):
         if not row:
             raise HTTPException(status_code=404, detail="Context not found.")
         prompt = f"Answer strictly based on context.\n\nCONTEXT:\n{row[0]}\n\nUSER QUESTION:\n{payload.question}"
-        response = ai_client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        response = ai_client.models.generate_content(model='gemini-3.1-flash-lite', contents=prompt)
         return {"answer": response.text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
